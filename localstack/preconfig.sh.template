@@ -1,0 +1,7 @@
+#!/bin/bash
+aws configure set cli_follow_urlparam false
+
+awslocal ssm put-parameter --name '/local/lambda/common/LAMBDA_STAGE' --type 'String' --value 'local' --overwrite
+awslocal ssm put-parameter --name '/local/lambda/common/API_KEY' --type 'String' --value 'your-api-key' --overwrite
+
+awslocal ssm put-parameter --name '/local/lambda/common/SQS_ORDER_PROCESS_QUEUE' --type 'String' --value 'http://oms-localstack:4566/000000000000/q-local-order-process' --overwrite

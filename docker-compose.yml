@@ -1,0 +1,35 @@
+version: "3.7"
+services:
+  oms-proxy:
+    image: node:14.17.6
+    container_name: oms-proxy
+    working_dir: /var/workspace
+    ports:
+      - 3000:3000
+    volumes:
+      - ./:/var/workspace
+    networks:
+      - omsnet
+    command: sleep infinity
+
+  oms-localstack:
+    image: localstack/localstack:0.13.0
+    container_name: oms-localstack
+    ports:
+      - 4566:4566
+    environment:
+      - AWS_DEFAULT_REGION=eu-west-1
+      - DEBUG=1
+      - SERVICES=ssm,lambda,s3,cloudformation,sqs,sts,apigateway,iam
+      - LAMBDA_EXECUTOR=docker-reuse
+      - LAMBDA_DOCKER_NETWORK=omsnet
+      - DATA_DIR=/tmp/localstack/data
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ~/ddata/oms/local/localstack:/tmp/localstack
+      - ./localstack:/docker-entrypoint-initaws.d
+    networks:
+      - omsnet
+networks:
+  omsnet:
+    external: true

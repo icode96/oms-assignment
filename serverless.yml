@@ -1,0 +1,89 @@
+service: oms-proxy
+frameworkVersion: '2'
+
+plugins:
+  - serverless-esbuild
+  - serverless-offline
+  - serverless-localstack
+
+
+provider:
+  name: aws
+  runtime: nodejs14.x
+  lambdaHashingVersion: 20201221
+  stage: local
+  region: eu-west-1
+  environment:
+    AWS_ENDPOINT: ${ssm:/${opt:stage, self:provider.stage}/lambda/common/AWS_ENDPOINT}
+    LAMBDA_STAGE: ${ssm:/${opt:stage, self:provider.stage}/lambda/common/LAMBDA_STAGE}
+    SQS_ORDER_PROCESS_QUEUE: ${ssm:/${opt:stage, self:provider.stage}/lambda/common/SQS_ORDER_PROCESS_QUEUE}
+    STORAGE_ORDER_CSV: ${ssm:/${opt:stage, self:provider.stage}/lambda/common/STORAGE_ORDER_CSV}
+    API_KEY: ${ssm:/${opt:stage, self:provider.stage}/lambda/common/API_KEY}
+
+package:
+  individually: true
+
+custom:
+  esbuild:
+    bundle: true
+    minify: false
+    sourcemap: true
+    exclude: aws-sdk
+    target: node14
+    define:
+      'require.resolve': undefined
+    platform: node
+    concurrency: 10
+  localstack:
+    stages:
+      - local
+    host: http://oms-localstack #(default: http://localhost)
+    debug: true
+  serverless-offline:
+    httpPort: 3000
+    host: 0.0.0.0
+
+functions:
+  createOrder:
+    handler: src/functions/main.createOrder
+    events:
+      - http:
+          path: order/{orderId}
+          method: put
+          request:
+            parameters:
+              paths:
+                orderId: true
+
+  processOrder:
+    handler: src/functions/main.processOrder
+  placeOrder:
+    handler: src/functions/main.placeOrder
+    events:
+      - sqs:
+          arn:
+            Fn::GetAtt:
+              - qOrderProcess
+              - Arn
+
+resources:
+  Resources:
+    qOrderProcess:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: q-${opt:stage, self:provider.stage, 'local'}-order-process
+        VisibilityTimeout: 400
+        RedrivePolicy:
+          deadLetterTargetArn:
+            Fn::GetAtt:
+              - dlqOrderProcess
+              - Arn
+          maxReceiveCount: 1
+    dlqOrderProcess:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: dlq-${opt:stage, self:provider.stage, 'local'}-order-process
+    orderCSVBucket:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: storage.${opt:stage, self:provider.stage, 'local'}.orders.csv
